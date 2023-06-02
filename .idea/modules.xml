@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/MADDPG-master.iml" filepath="$PROJECT_DIR$/.idea/MADDPG-master.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../multiagent-particle-envs-master/multiagent/.idea/multiagent.iml" filepath="$PROJECT_DIR$/../multiagent-particle-envs-master/multiagent/.idea/multiagent.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../multiagent-particle-envs-master/.idea/multiagent-particle-envs-master.iml" filepath="$PROJECT_DIR$/../multiagent-particle-envs-master/.idea/multiagent-particle-envs-master.iml" />
+    </modules>
+  </component>
+</project>
