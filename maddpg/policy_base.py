@@ -100,3 +100,19 @@ class BasePolicy:
         for param_name in current_vnet_dict.keys():
             current_vnet_dict[param_name] /= len(neighbors_vnet)
         self.policy.v_net.load_state_dict(current_vnet_dict)
+
+    def k_level_communication(self, policies, policy_initial, num_left_batches, left_batches, k_levels):
+        for k in range(0, k_levels):
+            output_dist = {}
+            for agent_ix, agent in enumerate(self.AGENT_NAMES):
+                batched_neighbors = [[] for _ in range(0, num_left_batches)] # for each batch, the policies of agent
+                for batch_ix in range(0, num_left_batches):
+                    actual_batch_number = left_batches[batch_ix]
+                    neighbor_mask_for_agent = (self.adj_matrix[actual_batch_number][agent_ix] == 1)
+                    neighbor_names = self.AGENT_NAMES[neighbor_mask_for_agent]
+                    for neighbor in neighbor_names:
+                        batched_neighbors[batch_ix].append([policy_initial[neighbor][batch_ix], neighbor, batch_ix])
+                latent_vector = policies[agent].forward(policy_initial[agent], 1, batched_neighbors)
+                output_dist[agent] = latent_vector
+            policy_initial = output_dist
+        return policy_initial

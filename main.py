@@ -5,12 +5,11 @@ import numpy as np
 import random
 import torch
 
-
 if __name__ == '__main__':
-    # get the params
+    device = torch.device("cpu")
     args = get_args()
-    args.time_steps = 2000
-    args.scenario_name = "simple_adversary"
+    args.time_steps = 2000000
+    args.device = device
     env, args = make_env(args)
     runner = Runner(args, env)
     if args.evaluate:

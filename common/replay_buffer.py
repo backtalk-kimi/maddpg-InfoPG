@@ -15,11 +15,12 @@ class Buffer:
             self.buffer['u_%d' % i] = np.empty([self.size, self.args.action_shape[i]])
             self.buffer['r_%d' % i] = np.empty([self.size])
             self.buffer['o_next_%d' % i] = np.empty([self.size, self.args.obs_shape[i]])
+            self.buffer['u_initial_%d' % i] = np.empty([self.size, 5])
         # thread lock
         self.lock = threading.Lock()
 
     # store the episode
-    def store_episode(self, o, u, r, o_next):
+    def store_episode(self, o, u, r, o_next, u_initial):
         idxs = self._get_storage_idx(inc=1)  # 以transition的形式存，每次只存一条经验
         for i in range(self.args.n_agents):
             with self.lock:
@@ -27,6 +28,7 @@ class Buffer:
                 self.buffer['u_%d' % i][idxs] = u[i]
                 self.buffer['r_%d' % i][idxs] = r[i]
                 self.buffer['o_next_%d' % i][idxs] = o_next[i]
+                self.buffer['u_initial_%d' % i][idxs] = u_initial[i]
     
     # sample the data from the replay buffer
     def sample(self, batch_size):
