@@ -33,10 +33,8 @@ def store_args(method):
 def make_env(args):
     from multiagent.environment import MultiAgentEnv
     import multiagent.scenarios as scenarios
-
     # load scenario from script
     scenario = scenarios.load(args.scenario_name + ".py").Scenario()
-
     # create world
     world = scenario.make_world()
     # create multiagent environment

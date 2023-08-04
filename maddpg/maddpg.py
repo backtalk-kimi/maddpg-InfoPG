@@ -1,6 +1,6 @@
 import torch
 import os
-from maddpg.actor_critic import Actor, Critic, Fitting
+from actor_critic import Actor, Critic, Fitting
 import matplotlib.pyplot as plt
 import torch.nn as nn
 import numpy as np
@@ -61,19 +61,19 @@ class MADDPG():
         for target_param, param in zip(self.critic_target_network.parameters(), self.critic_network.parameters()):
             target_param.data.copy_((1 - self.args.tau) * target_param.data + self.args.tau * param.data)
 
-    def select_action(self, observations, fittings_network):
+    def select_action(self, observations, actor, fittings_network):
         policy_initial = []
         for id in range(self.args.n_agents):
             inputs = observations[id]
             if id == self.agent_id:
-                initial_policy_distribution = self.actor_network.forward(inputs,0,None)
+                initial_policy_distribution = actor.forward(inputs,0,None)
             else:
                 initial_policy_distribution = fittings_network[id].forward(inputs, 0)
             policy_initial.append(initial_policy_distribution)
 
         # action_initial = policy_initial
-        policy_com = self.actor_network.forward(policy_initial[self.agent_id], 1, policy_initial)
-        policy_final = self.actor_network.forward(policy_com, 2, None)
+        policy_com = actor.forward(policy_initial[self.agent_id], 1, policy_initial)
+        policy_final = actor.forward(policy_com, 2, None)
         return policy_final, policy_initial
 
     # update the network
@@ -94,14 +94,14 @@ class MADDPG():
             # else:
             #     target_policies.append(self.actor_target_network)
         # critic_loss
-        actions_next, latent_next = self.select_action(o_next, fitting_networks)
+        actions_next, latent_next = self.select_action(o_next, self.actor_target_network, fitting_networks)
         q_value = self.critic_network(o, u_initial, u[self.agent_id])
         q_next = self.critic_target_network(o_next, latent_next, actions_next).detach()
         target_q = (r.unsqueeze(1) + self.args.gamma * q_next).detach()
         critic_loss = (target_q - q_value).pow(2).mean()
         # the actor loss
         # 重新选择联合动作中当前agent的动作，其他agent的动作不变
-        actions, latent = self.select_action(o, fitting_networks)
+        actions, latent = self.select_action(o, self.actor_network, fitting_networks)
         actor_loss = - self.critic_network(o, latent, actions).mean()
 
         self.actor_optim.zero_grad()
@@ -113,8 +113,8 @@ class MADDPG():
         self.critic_optim.step()
 
         self._soft_update_target_network()
-        # if self.train_step > 0 and self.train_step % self.args.save_rate == 0:
-        #     self.save_model(self.train_step)
+        if self.train_step > 0 and self.train_step % self.args.save_rate == 0:
+            self.save_model(self.train_step)
         self.train_step += 1
 
     def save_model(self, train_step):

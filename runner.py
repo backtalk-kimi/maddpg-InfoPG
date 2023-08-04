@@ -6,6 +6,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from maddpg.actor_critic import Fitting
+import pickle
 
 class Runner:
     def __init__(self, args, env):
@@ -15,7 +16,17 @@ class Runner:
         self.episode_limit = args.max_episode_len
         self.env = env
         self.agents = self._init_agents()
-        self.fitting_networks = self._init_fittings()
+        # self.fitting_networks = self._init_fittings()
+
+        # model_path = os.path.join(self.args.save_dir, self.args.scenario_name)
+        # for agent in self.agents:
+        #     file_path = os.path.join(model_path, 'agent_%d' % agent.agent_id, num + '_actor_params.pkl')
+        #     parameters = torch.load(file_path)
+        #     agent.policy.actor_network.load_state_dict(parameters)
+        #     file_path = os.path.join(model_path, 'agent_%d' % agent.agent_id, num + '_critic_params.pkl')
+        #     parameters = torch.load(file_path)
+        #     agent.policy.critic_network.load_state_dict(parameters)
+
         self.buffer = Buffer(args)
         self.save_path = self.args.save_dir + '/' + self.args.scenario_name
         if not os.path.exists(self.save_path):
@@ -29,17 +40,17 @@ class Runner:
             agents.append(agent)
         return agents
 
-    def _init_fittings(self):
-        fitting_networks = {}
-        for id in range(self.args.n_agents):
-            fitting_networks[id] = Fitting().to(self.args.device)
-            fitting_networks[id].copy_weights(self.agents[id].policy.actor_network)
-        return fitting_networks
-
-    def fitting_update(self):
-        for id in range(self.args.n_agents):
-            self.fitting_networks[id].copy_weights(self.agents[id].policy.actor_target_network)
-        return
+    # def _init_fittings(self):
+    #     fitting_networks = {}
+    #     for id in range(self.args.n_agents):
+    #         fitting_networks[id] = Fitting().to(self.args.device)
+    #         fitting_networks[id].copy_weights(self.agents[id].policy.actor_network)
+    #     return fitting_networks
+    #
+    # def fitting_update(self):
+    #     for id in range(self.args.n_agents):
+    #         self.fitting_networks[id].copy_weights(self.agents[id].policy.actor_target_network)
+    #     return
 
     def get_init_actions(self, observations):
         policy_initial = []
@@ -60,8 +71,6 @@ class Runner:
             policy_initial.append(initial_policy_distribution)
             actions_initial.append(initial_policy_distribution.to('cpu'))
 
-        # action_initial = policy_initial
-        # neighbors_policy = policy_initial
         for i,policy in enumerate(policies):
             if np.random.uniform() < epsilon:
                 latent_vector = np.random.uniform(-self.args.high_action, self.args.high_action,
@@ -88,48 +97,72 @@ class Runner:
                 action, actions_initial = self.get_actions(s, self.agents, self.noise, self.epsilon)
                 u = action
                 actions = action
-            for i in range(self.args.n_agents, self.args.n_players):
-                actions.append([0, np.random.rand() * 2 - 1, 0, np.random.rand() * 2 - 1, 0])
+
             s_next, r, done, info = self.env.step(actions)
             self.buffer.store_episode(s[:self.args.n_agents], u, r[:self.args.n_agents], s_next[:self.args.n_agents], actions_initial)
             s = s_next
             if self.buffer.current_size >= self.args.batch_size:
                 transitions = self.buffer.sample(self.args.batch_size)
-
-                self.fitting_update()
+                fitting_list = []
+                # self.fitting_update()
+                for agent in self.agents:
+                    fitting_list.append(agent.policy.actor_target_network)
 
                 for agent in self.agents:
                     # policies = [a.policy for a in self.agents]
-                    agent.learn(transitions, self.fitting_networks)
+                    agent.learn(transitions, fitting_list)
 
             if time_step > 0 and time_step % self.args.evaluate_rate == 0:
                 returns.append(self.evaluate())
-                # plt.figure()
-                # plt.plot(range(len(returns)), returns)
-                # plt.xlabel('episode * ' + str(self.args.evaluate_rate))
-                # plt.ylabel('average returns')
-                # plt.savefig(self.save_path + '/plt.png', format='png')
-                # plt.cla()
+                plt.figure()
+                plt.plot(range(len(returns)), returns)
+                plt.xlabel('episode * ' + str(self.args.evaluate_rate))
+                plt.ylabel('average returns')
+                plt.savefig(self.save_path + '/plt.png', format='png')
+                plt.cla()
             self.noise = max(0.05, self.noise - 0.0000005)
             self.epsilon = max(0.05, self.epsilon - 0.0000005)
             np.save(self.save_path + '/returns.pkl', returns)
 
     def evaluate(self):
         returns = []
+        if self.args.evaluate:
+            model_path = os.path.join(self.args.save_dir, self.args.scenario_name)
+            num = '120'
+            for agent in self.agents:
+                file_path = os.path.join(model_path, 'agent_%d' % agent.agent_id, num + '_actor_params.pkl')
+                parameters = torch.load(file_path)
+                agent.policy.actor_network.load_state_dict(parameters)
+
         for episode in range(self.args.evaluate_episodes):
             # reset the environment
             s = self.env.reset()
             rewards = 0
+            if self.args.evaluate:
+                reward_list = []
+
+
             for time_step in range(self.args.evaluate_episode_len):
-                self.env.render()
+                # self.env.render()
                 # actions = []
                 with torch.no_grad():
-                   actions,_ = self.get_actions(s, self.agents, 0, 0)
+                   actions, latents = self.get_actions(s, self.agents, 0, 0)
+
                 for i in range(self.args.n_agents, self.args.n_players):
                     actions.append([0, np.random.rand() * 2 - 1, 0, np.random.rand() * 2 - 1, 0])
                 s_next, r, done, info = self.env.step(actions)
+
+                if self.args.evaluate:
+                    reward_list.append(r)
                 rewards += r[0]
                 s = s_next
+            if self.args.evaluate:
+                file_path = os.path.join(model_path,'episode%d'%episode+'_rewards.txt')
+                with open(file_path, 'w') as f:
+                    for r in reward_list:
+                        f.write("%s\n"%r)
+                f.close()
+
             returns.append(rewards)
             print('Returns is', rewards)
         return sum(returns) / self.args.evaluate_episodes
